@@ -1,297 +1,195 @@
-var squareRotation = 0.0;
-
-main();
-
-//
-// Start here
-//
-function main() {
-  const canvas = document.querySelector('#glcanvas');
-  const gl = canvas.getContext('webgl');
-
-  // If we don't have a GL context, give up now
-
-  if (!gl) {
-    alert('Unable to initialize WebGL. Your browser or machine may not support it.');
-    return;
-  }
-
-  // Vertex shader program
-
-  const vsSource = `
-    attribute vec4 aVertexPosition;
-    attribute vec4 aVertexColor;
-
-    uniform mat4 uModelViewMatrix;
-    uniform mat4 uProjectionMatrix;
-
-    varying lowp vec4 vColor;
-
-    void main(void) {
-      gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-      vColor = aVertexColor;
-    }
-  `;
-
-  // Fragment shader program
-
-  const fsSource = `
-    varying lowp vec4 vColor;
-
-    void main(void) {
-      gl_FragColor = vColor;
-    }
-  `;
-
-  // Initialize a shader program; this is where all the lighting
-  // for the vertices and so forth is established.
-  const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
-
-  // Collect all the info needed to use the shader program.
-  // Look up which attributes our shader program is using
-  // for aVertexPosition, aVevrtexColor and also
-  // look up uniform locations.
-  const programInfo = {
-    program: shaderProgram,
-    attribLocations: {
-      vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
-      vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
-    },
-    uniformLocations: {
-      projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
-      modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
-    },
-  };
-
-  // Here's where we call the routine that builds all the
-  // objects we'll be drawing.
-  const buffers = initBuffers(gl);
-
-  var then = 0;
-  // Draw the scene repeatedly
-  function render(now) {
-    now *= 0.001;  // convert to seconds
-    const deltaTime = now - then;
-    then = now;
-
-    drawScene(gl, programInfo, buffers, deltaTime);
-
-    requestAnimationFrame(render);
-  }
-  requestAnimationFrame(render);
+// player motion parameters
+var motion = {
+	airborne: false,
+	position: new THREE.Vector3(), velocity: new THREE.Vector3(),
+	rotation: new THREE.Vector2(), spinning: new THREE.Vector2()
+};
+motion.position.y = - 150;
+// game systems code
+var resetPlayer = function () {
+	if ( motion.position.y < - 123 ) {
+		motion.position.set( - 2, 7.7, 25 );
+		motion.velocity.multiplyScalar( 0 );
+	}
+};
+var keyboardControls = ( function () {
+	var keys = { SP: 32, W: 87, A: 65, S: 83, D: 68, UP: 38, LT: 37, DN: 40, RT: 39 };
+	var keysPressed = {};
+	( function ( watchedKeyCodes ) {
+		var handler = function ( down ) {
+			return function ( e ) {
+				var index = watchedKeyCodes.indexOf( e.keyCode );
+				if ( index >= 0 ) {
+					keysPressed[ watchedKeyCodes[ index ] ] = down;
+					e.preventDefault();
+				}
+			};
+		};
+		window.addEventListener( "keydown", handler( true ), false );
+		window.addEventListener( "keyup", handler( false ), false );
+	} )( [
+		keys.SP, keys.W, keys.A, keys.S, keys.D, keys.UP, keys.LT, keys.DN, keys.RT
+	] );
+	var forward = new THREE.Vector3();
+	var sideways = new THREE.Vector3();
+	return function () {
+		if ( ! motion.airborne ) {
+			// look around
+			var sx = keysPressed[ keys.UP ] ? 0.03 : ( keysPressed[ keys.DN ] ? - 0.03 : 0 );
+			var sy = keysPressed[ keys.LT ] ? 0.03 : ( keysPressed[ keys.RT ] ? - 0.03 : 0 );
+			if ( Math.abs( sx ) >= Math.abs( motion.spinning.x ) ) motion.spinning.x = sx;
+			if ( Math.abs( sy ) >= Math.abs( motion.spinning.y ) ) motion.spinning.y = sy;
+			// move around
+			forward.set( Math.sin( motion.rotation.y ), 0, Math.cos( motion.rotation.y ) );
+			sideways.set( forward.z, 0, - forward.x );
+			forward.multiplyScalar( keysPressed[ keys.W ] ? - 0.1 : ( keysPressed[ keys.S ] ? 0.1 : 0 ) );
+			sideways.multiplyScalar( keysPressed[ keys.A ] ? - 0.1 : ( keysPressed[ keys.D ] ? 0.1 : 0 ) );
+			var combined = forward.add( sideways );
+			if ( Math.abs( combined.x ) >= Math.abs( motion.velocity.x ) ) motion.velocity.x = combined.x;
+			if ( Math.abs( combined.y ) >= Math.abs( motion.velocity.y ) ) motion.velocity.y = combined.y;
+			if ( Math.abs( combined.z ) >= Math.abs( motion.velocity.z ) ) motion.velocity.z = combined.z;
+			//jump
+			var vy = keysPressed[ keys.SP ] ? 0.7 : 0;
+			motion.velocity.y += vy;
+		}
+	};
+} )();
+var jumpPads = ( function () {
+	var pads = [ new THREE.Vector3( - 17.5, 8, - 10 ), new THREE.Vector3( 17.5, 8, - 10 ), new THREE.Vector3( 0, 8, 21 ) ];
+	var temp = new THREE.Vector3();
+	return function () {
+		if ( ! motion.airborne ) {
+			for ( var j = 0, n = pads.length; j < n; j ++ ) {
+				if ( pads[ j ].distanceToSquared( motion.position ) < 2.3 ) {
+					// calculate velocity towards another side of platform from jump pad position
+					temp.copy( pads[ j ] );
+					temp.y = 0;
+					temp.setLength( - 0.8 );
+					temp.y = 0.7;
+					motion.airborne = true;
+					motion.velocity.copy( temp );
+					break;
+				}
+			}
+		}
+	};
+} )();
+var applyPhysics = ( function () {
+	var timeStep = 5;
+	var timeLeft = timeStep + 1;
+	var birdsEye = 100;
+	var kneeDeep = 0.4;
+	var raycaster = new THREE.Raycaster();
+	raycaster.ray.direction.set( 0, - 1, 0 );
+	var angles = new THREE.Vector2();
+	var displacement = new THREE.Vector3();
+	return function ( dt ) {
+		var platform = scene.getObjectByName( "platform", true );
+		if ( platform ) {
+			timeLeft += dt;
+			// run several fixed-step iterations to approximate varying-step
+			dt = 5;
+			while ( timeLeft >= dt ) {
+				var time = 0.3, damping = 0.93, gravity = 0.01, tau = 2 * Math.PI;
+				raycaster.ray.origin.copy( motion.position );
+				raycaster.ray.origin.y += birdsEye;
+				var hits = raycaster.intersectObject( platform );
+				motion.airborne = true;
+				// are we above, or at most knee deep in, the platform?
+				if ( ( hits.length > 0 ) && ( hits[ 0 ].face.normal.y > 0 ) ) {
+					var actualHeight = hits[ 0 ].distance - birdsEye;
+					// collision: stick to the surface if landing on it
+					if ( ( motion.velocity.y <= 0 ) && ( Math.abs( actualHeight ) < kneeDeep ) ) {
+						motion.position.y -= actualHeight;
+						motion.velocity.y = 0;
+						motion.airborne = false;
+					}
+				}
+				if ( motion.airborne ) motion.velocity.y -= gravity;
+				angles.copy( motion.spinning ).multiplyScalar( time );
+				if ( ! motion.airborne ) motion.spinning.multiplyScalar( damping );
+				displacement.copy( motion.velocity ).multiplyScalar( time );
+				if ( ! motion.airborne ) motion.velocity.multiplyScalar( damping );
+				motion.rotation.add( angles );
+				motion.position.add( displacement );
+				// limit the tilt at ±0.4 radians
+				motion.rotation.x = Math.max( - 0.4, Math.min( + 0.4, motion.rotation.x ) );
+				// wrap horizontal rotation to 0...2π
+				motion.rotation.y += tau;
+				motion.rotation.y %= tau;
+				timeLeft -= dt;
+			}
+		}
+	};
+} )();
+var updateCamera = ( function () {
+	var euler = new THREE.Euler( 0, 0, 0, 'YXZ' );
+	return function () {
+		euler.x = motion.rotation.x;
+		euler.y = motion.rotation.y;
+		camera.quaternion.setFromEuler( euler );
+		camera.position.copy( motion.position );
+		camera.position.y += 3.0;
+	};
+} )();
+// init 3D stuff
+function makePlatform( url ) {
+	var placeholder = new THREE.Object3D();
+	var loader = new THREE.ObjectLoader();
+	loader.load( url, function ( platform ) {
+		placeholder.add( platform );
+	} );
+	return placeholder;
 }
-
-//
-// initBuffers
-//
-// Initialize the buffers we'll need. For this demo, we just
-// have one object -- a simple two-dimensional square.
-//
-function initBuffers(gl) {
-
-  // Create a buffer for the square's positions.
-
-  const positionBuffer = gl.createBuffer();
-
-  // Select the positionBuffer as the one to apply buffer
-  // operations to from here out.
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-  // Now create an array of positions for the square.
-
-  const positions = [
-     1.0,  1.0,
-    -1.0,  1.0,
-     1.0, -1.0,
-    -1.0, -1.0,
-  ];
-
-  // Now pass the list of positions into WebGL to build the
-  // shape. We do this by creating a Float32Array from the
-  // JavaScript array, then use it to fill the current buffer.
-
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-
-  // Now set up the colors for the vertices
-
-  var colors = [
-    1.0,  1.0,  1.0,  1.0,    // white
-    1.0,  0.0,  0.0,  1.0,    // red
-    0.0,  1.0,  0.0,  1.0,    // green
-    0.0,  0.0,  1.0,  1.0,    // blue
-  ];
-
-  const colorBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
-
-  return {
-    position: positionBuffer,
-    color: colorBuffer,
-  };
-}
-
-//
-// Draw the scene.
-//
-function drawScene(gl, programInfo, buffers,deltaTime) {
-  gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
-  gl.clearDepth(1.0);                 // Clear everything
-  gl.enable(gl.DEPTH_TEST);           // Enable depth testing
-  gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
-
-  // Clear the canvas before we start drawing on it.
-
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-  // Create a perspective matrix, a special matrix that is
-  // used to simulate the distortion of perspective in a camera.
-  // Our field of view is 45 degrees, with a width/height
-  // ratio that matches the display size of the canvas
-  // and we only want to see objects between 0.1 units
-  // and 100 units away from the camera.
-
-  const fieldOfView = 45 * Math.PI / 180;   // in radians
-  const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-  const zNear = 0.1;
-  const zFar = 100.0;
-  const projectionMatrix = mat4.create();
-
-  // note: glmatrix.js always has the first argument
-  // as the destination to receive the result.
-  mat4.perspective(projectionMatrix,
-                   fieldOfView,
-                   aspect,
-                   zNear,
-                   zFar);
-
-  // Set the drawing position to the "identity" point, which is
-  // the center of the scene.
-  const modelViewMatrix = mat4.create();
-
-  // Now move the drawing position a bit to where we want to
-  // start drawing the square.
-
-  mat4.translate(modelViewMatrix,     // destination matrix
-                 modelViewMatrix,     // matrix to translate
-                 [-0.0, 0.0, -6.0]);  // amount to translate
-				 
-  mat4.rotate(modelViewMatrix,  // destination matrix
-              modelViewMatrix,  // matrix to rotate
-              -squareRotation,   // amount to rotate in radians
-              [0, 0, 1]);       // axis to rotate around
-
-  // Tell WebGL how to pull out the positions from the position
-  // buffer into the vertexPosition attribute
-  {
-    const numComponents = 2;
-    const type = gl.FLOAT;
-    const normalize = false;
-    const stride = 0;
-    const offset = 0;
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
-    gl.vertexAttribPointer(
-        programInfo.attribLocations.vertexPosition,
-        numComponents,
-        type,
-        normalize,
-        stride,
-        offset);
-    gl.enableVertexAttribArray(
-        programInfo.attribLocations.vertexPosition);
-  }
-
-  // Tell WebGL how to pull out the colors from the color buffer
-  // into the vertexColor attribute.
-  {
-    const numComponents = 4;
-    const type = gl.FLOAT;
-    const normalize = false;
-    const stride = 0;
-    const offset = 0;
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.color);
-    gl.vertexAttribPointer(
-        programInfo.attribLocations.vertexColor,
-        numComponents,
-        type,
-        normalize,
-        stride,
-        offset);
-    gl.enableVertexAttribArray(
-        programInfo.attribLocations.vertexColor);
-  }
-
-  // Tell WebGL to use our program when drawing
-
-  gl.useProgram(programInfo.program);
-
-  // Set the shader uniforms
-
-  gl.uniformMatrix4fv(
-      programInfo.uniformLocations.projectionMatrix,
-      false,
-      projectionMatrix);
-  gl.uniformMatrix4fv(
-      programInfo.uniformLocations.modelViewMatrix,
-      false,
-      modelViewMatrix);
-
-  {
-    const offset = 0;
-    const vertexCount = 4;
-    gl.drawArrays(gl.TRIANGLE_STRIP, offset, vertexCount);
-  }
-   squareRotation += deltaTime;
-}
-
-//
-// Initialize a shader program, so WebGL knows how to draw our data
-//
-function initShaderProgram(gl, vsSource, fsSource) {
-  const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
-  const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
-
-  // Create the shader program
-
-  const shaderProgram = gl.createProgram();
-  gl.attachShader(shaderProgram, vertexShader);
-  gl.attachShader(shaderProgram, fragmentShader);
-  gl.linkProgram(shaderProgram);
-
-  // If creating the shader program failed, alert
-
-  if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-    alert('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
-    return null;
-  }
-
-  return shaderProgram;
-}
-
-//
-// creates a shader of the given type, uploads the source and
-// compiles it.
-//
-function loadShader(gl, type, source) {
-  const shader = gl.createShader(type);
-
-  // Send the source to the shader object
-
-  gl.shaderSource(shader, source);
-
-  // Compile the shader program
-
-  gl.compileShader(shader);
-
-  // See if it compiled successfully
-
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    alert('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
-    gl.deleteShader(shader);
-    return null;
-  }
-
-  return shader;
-}
-
+var renderer = new THREE.WebGLRenderer( { antialias: true } );
+renderer.setPixelRatio( window.devicePixelRatio );
+document.body.appendChild( renderer.domElement );
+var camera = new THREE.PerspectiveCamera( 60, 1, 0.1, 9000 );
+var scene = new THREE.Scene();
+var envMap = new THREE.CubeTextureLoader().load( [
+	'textures/cube/skybox/px.jpg', // right
+	'textures/cube/skybox/nx.jpg', // left
+	'textures/cube/skybox/py.jpg', // top
+	'textures/cube/skybox/ny.jpg', // bottom
+	'textures/cube/skybox/pz.jpg', // back
+	'textures/cube/skybox/nz.jpg' // front
+] );
+envMap.format = THREE.RGBFormat;
+scene.background = envMap;
+scene.add( makePlatform(
+	'models/json/platform/platform.json'
+) );
+// start the game
+var start = function ( gameLoop, gameViewportSize ) {
+	var resize = function () {
+		var viewport = gameViewportSize();
+		renderer.setSize( viewport.width, viewport.height );
+		camera.aspect = viewport.width / viewport.height;
+		camera.updateProjectionMatrix();
+	};
+	window.addEventListener( 'resize', resize, false );
+	resize();
+	var lastTimeStamp;
+	var render = function ( timeStamp ) {
+		var timeElapsed = lastTimeStamp ? timeStamp - lastTimeStamp : 0;
+		lastTimeStamp = timeStamp;
+		// call our game loop with the time elapsed since last rendering, in ms
+		gameLoop( timeElapsed );
+		renderer.render( scene, camera );
+		requestAnimationFrame( render );
+	};
+	requestAnimationFrame( render );
+};
+var gameLoop = function ( dt ) {
+	resetPlayer();
+	keyboardControls();
+	jumpPads();
+	applyPhysics( dt );
+	updateCamera();
+};
+var gameViewportSize = function () {
+	return {
+		width: window.innerWidth, height: window.innerHeight
+	};
+};
+start( gameLoop, gameViewportSize );
