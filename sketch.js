@@ -1,19 +1,22 @@
-// player motion parameters
-var motion = {
+// player player parameters
+var player = {
 	airborne: false,
-	position: new THREE.Vector3(), velocity: new THREE.Vector3(),
-	rotation: new THREE.Vector2(), spinning: new THREE.Vector2()
+	position: new THREE.Vector3(), 
+	velocity: new THREE.Vector3(),
+	rotation: new THREE.Vector2(), 
+	spinning: new THREE.Vector2()
 };
-motion.position.y = - 150;
+player.position.x = 0;
+player.position.y =  150;
+player.position.z = 0;
+//player.position.y = 0;
 // game systems code
-var resetPlayer = function () {
-	if ( motion.position.y < - 123 ) {
-		motion.position.set( - 2, 7.7, 25 );
-		motion.velocity.multiplyScalar( 0 );
-	}
-};
+
+var collidableMeshList = [];
 var keyboardControls = ( function () {
-	var keys = { SP: 32, W: 87, A: 65, S: 83, D: 68, UP: 38, LT: 37, DN: 40, RT: 39 };
+		//var keys = { SP: 32, W: 87, A: 65, S: 83, D: 68, UP: 38, LT: 37, DN: 40, RT: 39 };
+	var keys = { SP: 32, W: 87, A: 65, Z: 90, Q: 81, S: 83, D: 68, UP: 38, LT: 37, DN: 40, RT: 39 };
+
 	var keysPressed = {};
 	( function ( watchedKeyCodes ) {
 		var handler = function ( down ) {
@@ -28,59 +31,83 @@ var keyboardControls = ( function () {
 		window.addEventListener( "keydown", handler( true ), false );
 		window.addEventListener( "keyup", handler( false ), false );
 	} )( [
-		keys.SP, keys.W, keys.A, keys.S, keys.D, keys.UP, keys.LT, keys.DN, keys.RT
+		keys.SP, keys.Z, keys.W, keys.A, keys.Q, keys.S, keys.D, keys.UP, keys.LT, keys.DN, keys.RT
 	] );
 	var forward = new THREE.Vector3();
 	var sideways = new THREE.Vector3();
 	return function () {
-		if ( ! motion.airborne ) {
+		if ( ! player.airborne ) {
 			// look around
-			var sx = keysPressed[ keys.UP ] ? 0.03 : ( keysPressed[ keys.DN ] ? - 0.03 : 0 );
-			var sy = keysPressed[ keys.LT ] ? 0.03 : ( keysPressed[ keys.RT ] ? - 0.03 : 0 );
-			if ( Math.abs( sx ) >= Math.abs( motion.spinning.x ) ) motion.spinning.x = sx;
-			if ( Math.abs( sy ) >= Math.abs( motion.spinning.y ) ) motion.spinning.y = sy;
+			var sx = keysPressed[ keys.UP ]? 0.03 : ( keysPressed[ keys.DN ] ? - 0.03 : 0 );
+			var sy = keysPressed[ keys.LT ] || keysPressed[ keys.Q ] || keysPressed[ keys.A]  ? 0.03 : ( keysPressed[ keys.RT ] || keysPressed[ keys.D ] ? - 0.03 : 0 );
+			if ( Math.abs( sx ) >= Math.abs( player.spinning.x ) ) player.spinning.x = sx;
+			if ( Math.abs( sy ) >= Math.abs( player.spinning.y ) ) player.spinning.y = sy;
 			// move around
-			forward.set( Math.sin( motion.rotation.y ), 0, Math.cos( motion.rotation.y ) );
+			forward.set( Math.sin( player.rotation.y ), 0, Math.cos( player.rotation.y ) );
 			sideways.set( forward.z, 0, - forward.x );
-			forward.multiplyScalar( keysPressed[ keys.W ] ? - 0.1 : ( keysPressed[ keys.S ] ? 0.1 : 0 ) );
-			sideways.multiplyScalar( keysPressed[ keys.A ] ? - 0.1 : ( keysPressed[ keys.D ] ? 0.1 : 0 ) );
+			forward.multiplyScalar( keysPressed[ keys.Z ] || keysPressed[ keys.W ] ? - 0.1 : ( keysPressed[ keys.S ] ? 0.1 : 0 ) );
+			sideways.multiplyScalar( 0 );
 			var combined = forward.add( sideways );
-			if ( Math.abs( combined.x ) >= Math.abs( motion.velocity.x ) ) motion.velocity.x = combined.x;
-			if ( Math.abs( combined.y ) >= Math.abs( motion.velocity.y ) ) motion.velocity.y = combined.y;
-			if ( Math.abs( combined.z ) >= Math.abs( motion.velocity.z ) ) motion.velocity.z = combined.z;
+			if ( Math.abs( combined.x ) >= Math.abs( player.velocity.x ) ) player.velocity.x = combined.x;
+			if ( Math.abs( combined.y ) >= Math.abs( player.velocity.y ) ) player.velocity.y = combined.y;
+			if ( Math.abs( combined.z ) >= Math.abs( player.velocity.z ) ) player.velocity.z = combined.z;
 			//jump
 			var vy = keysPressed[ keys.SP ] ? 0.7 : 0;
-			motion.velocity.y += vy;
+			player.velocity.y += vy;
 		}
 	};
 } )();
-var jumpPads = ( function () {
-	var pads = [ new THREE.Vector3( - 17.5, 8, - 10 ), new THREE.Vector3( 17.5, 8, - 10 ), new THREE.Vector3( 0, 8, 21 ) ];
-	var temp = new THREE.Vector3();
-	return function () {
-		if ( ! motion.airborne ) {
-			for ( var j = 0, n = pads.length; j < n; j ++ ) {
-				if ( pads[ j ].distanceToSquared( motion.position ) < 2.3 ) {
-					// calculate velocity towards another side of platform from jump pad position
-					temp.copy( pads[ j ] );
-					temp.y = 0;
-					temp.setLength( - 0.8 );
-					temp.y = 0.7;
-					motion.airborne = true;
-					motion.velocity.copy( temp );
-					break;
-				}
-			}
+
+function checkCollision(){
+	
+        var MovingCube = scene.getObjectByName('cube');
+        var originPoint = MovingCube.position.clone();
+
+		var forward = new THREE.Vector3();
+		var sideways = new THREE.Vector3();
+		forward.set( Math.sin( player.rotation.y ), 0, Math.cos( player.rotation.y ) );
+		sideways.set( forward.z, 0, - forward.x );
+		
+	for (var vertexIndex = 0; vertexIndex < MovingCube.geometry.vertices.length; vertexIndex++)
+	{		
+		var localVertex = MovingCube.geometry.vertices[vertexIndex].clone();
+		var globalVertex = localVertex.applyMatrix4( MovingCube.matrix );
+		var directionVector = globalVertex.sub( MovingCube.position );
+		
+		var ray = new THREE.Raycaster( originPoint, directionVector.clone().normalize() );
+		var collisionResults = ray.intersectObjects( collidableMeshList );
+		if ( collisionResults.length > 0 && collisionResults[0].distance < directionVector.length() ) {
+			
+
+
+	
+			forward.multiplyScalar( 0.75 );
+			sideways.multiplyScalar( 0 );
+			var combined = forward.add( sideways );
+			if ( Math.abs( combined.x ) >= Math.abs( player.velocity.x ) ) player.velocity.x = combined.x;
+			if ( Math.abs( combined.y ) >= Math.abs( player.velocity.y ) ) player.velocity.y = combined.y;
+			if ( Math.abs( combined.z ) >= Math.abs( player.velocity.z ) ) player.velocity.z = combined.z;
+			
+				keepTogether(player,cube)
 		}
-	};
-} )();
+			
+	}	
+
+}
+
+function keepTogether(player,cube){
+	cube.position.x = player.position.x;
+	cube.position.y = player.position.y;
+	cube.position.z = player.position.z;
+
+	cube.rotation.x = player.rotation.x;
+	cube.rotation.y = player.rotation.y;
+}
+
 var applyPhysics = ( function () {
 	var timeStep = 5;
 	var timeLeft = timeStep + 1;
-	var birdsEye = 100;
-	var kneeDeep = 0.4;
-	var raycaster = new THREE.Raycaster();
-	raycaster.ray.direction.set( 0, - 1, 0 );
+
 	var angles = new THREE.Vector2();
 	var displacement = new THREE.Vector3();
 	return function ( dt ) {
@@ -91,57 +118,49 @@ var applyPhysics = ( function () {
 			dt = 5;
 			while ( timeLeft >= dt ) {
 				var time = 0.3, damping = 0.93, gravity = 0.01, tau = 2 * Math.PI;
-				raycaster.ray.origin.copy( motion.position );
-				raycaster.ray.origin.y += birdsEye;
-				var hits = raycaster.intersectObject( platform );
-				motion.airborne = true;
-				// are we above, or at most knee deep in, the platform?
-				if ( ( hits.length > 0 ) && ( hits[ 0 ].face.normal.y > 0 ) ) {
-					var actualHeight = hits[ 0 ].distance - birdsEye;
-					// collision: stick to the surface if landing on it
-					if ( ( motion.velocity.y <= 0 ) && ( Math.abs( actualHeight ) < kneeDeep ) ) {
-						motion.position.y -= actualHeight;
-						motion.velocity.y = 0;
-						motion.airborne = false;
-					}
+				player.airborne = true;
+				if(player.position.y > -1 && player.position.y < 3){
+					player.position.y = 0;
+					player.velocity.y = 0;
+					player.airborne = false;
 				}
-				if ( motion.airborne ) motion.velocity.y -= gravity;
-				angles.copy( motion.spinning ).multiplyScalar( time );
-				if ( ! motion.airborne ) motion.spinning.multiplyScalar( damping );
-				displacement.copy( motion.velocity ).multiplyScalar( time );
-				if ( ! motion.airborne ) motion.velocity.multiplyScalar( damping );
-				motion.rotation.add( angles );
-				motion.position.add( displacement );
+				if(player.airborne) player.velocity.z = 0;
+				if ( player.airborne ) player.velocity.y -= gravity;
+				angles.copy( player.spinning ).multiplyScalar( time );
+				if ( ! player.airborne ) player.spinning.multiplyScalar( damping );
+				displacement.copy( player.velocity ).multiplyScalar( time );
+				if ( ! player.airborne ) player.velocity.multiplyScalar( damping );
+				player.rotation.add( angles );
+				player.position.add( displacement );
 				// limit the tilt at ±0.4 radians
-				motion.rotation.x = Math.max( - 0.4, Math.min( + 0.4, motion.rotation.x ) );
+				player.rotation.x = Math.max( - 0.4, Math.min( + 0.4, player.rotation.x ) );
 				// wrap horizontal rotation to 0...2π
-				motion.rotation.y += tau;
-				motion.rotation.y %= tau;
+				player.rotation.y += tau;
+				player.rotation.y %= tau;
 				timeLeft -= dt;
+				keepTogether(player,cube)
 			}
 		}
 	};
 } )();
+
 var updateCamera = ( function () {
 	var euler = new THREE.Euler( 0, 0, 0, 'YXZ' );
 	return function () {
-		euler.x = motion.rotation.x;
-		euler.y = motion.rotation.y;
+		euler.x = player.rotation.x;
+		euler.y = player.rotation.y;
 		camera.quaternion.setFromEuler( euler );
-		camera.position.copy( motion.position );
+		camera.position.copy( player.position );
 		camera.position.y += 3.0;
 	};
 } )();
 // init 3D stuff
-function makePlatform( url ) {
-	var placeholder = new THREE.Object3D();
-	var loader = new THREE.ObjectLoader();
-	loader.load( url, function ( platform ) {
-		placeholder.add( platform );
-	} );
-	return placeholder;
-}
+var wallGeometry = new THREE.CubeGeometry( 17, 8, 3, 1, 1, 1 );
+var wallMaterial = new THREE.MeshBasicMaterial( {color: 0x554400} );
+var wireMaterial = new THREE.MeshBasicMaterial( { color: 0x000000, wireframe:true } );
+	
 var renderer = new THREE.WebGLRenderer( { antialias: true } );
+
 renderer.setPixelRatio( window.devicePixelRatio );
 document.body.appendChild( renderer.domElement );
 var camera = new THREE.PerspectiveCamera( 60, 1, 0.1, 9000 );
@@ -156,9 +175,54 @@ var envMap = new THREE.CubeTextureLoader().load( [
 ] );
 envMap.format = THREE.RGBFormat;
 scene.background = envMap;
-scene.add( makePlatform(
-	'models/json/platform/platform.json'
-) );
+
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap; // default THREE.PCFShadowMap
+
+var light = new THREE.DirectionalLight( 0xffffff, 1, 100 );
+light.position.set( 0.5, 0.5, 0 ); 			//default; light shining from top
+light.castShadow = true;            // default false
+scene.add( light );
+
+//Set up shadow properties for the light
+light.shadow.mapSize.width = 512;  // default
+light.shadow.mapSize.height = 512; // default
+light.shadow.camera.near = 0.5;    // default
+light.shadow.camera.far = 500;     // default
+
+//Create a sphere that cast shadows (but does not receive them)
+var sphereGeometry = new THREE.SphereBufferGeometry( 5, 32, 32 );
+var sphereMaterial = new THREE.MeshStandardMaterial( { color: 0xff0000 } );
+var sphere = new THREE.Mesh( sphereGeometry, sphereMaterial );
+sphere.position.set( 0, 0, -25);
+sphere.castShadow = true; //default is false
+sphere.receiveShadow = false; //default
+scene.add( sphere );
+collidableMeshList.push(sphere)
+//Create a plane that receives shadows (but does not cast them)
+var planeGeometry = new THREE.PlaneBufferGeometry( 100, 100, 1, 1 );
+var planeMaterial = new THREE.MeshStandardMaterial( { color: 0x00aa00 } )
+var plane = new THREE.Mesh( planeGeometry, planeMaterial );
+plane.receiveShadow = true;
+plane.material.side = THREE.DoubleSide;
+plane.rotation.x = 1.5708;
+scene.add( plane );
+plane.name = "platform";
+
+var wall = new THREE.Mesh(wallGeometry, wallMaterial);
+wall.position.set(-20, 0, -20);
+wall.rotation.y = 3.14159 / 3;
+wall.receiveShadow = true;
+scene.add(wall);
+collidableMeshList.push(wall);
+
+var cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
+var cubeMaterial = new THREE.MeshLambertMaterial({color: 0xff2255});
+var cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+cube.name = 'cube';
+scene.add(cube);
+keepTogether(player,cube)
+
 // start the game
 var start = function ( gameLoop, gameViewportSize ) {
 	var resize = function () {
@@ -181,9 +245,8 @@ var start = function ( gameLoop, gameViewportSize ) {
 	requestAnimationFrame( render );
 };
 var gameLoop = function ( dt ) {
-	resetPlayer();
 	keyboardControls();
-	jumpPads();
+	checkCollision();
 	applyPhysics( dt );
 	updateCamera();
 };
