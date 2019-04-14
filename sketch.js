@@ -4,10 +4,13 @@ var player = {
 	position: new THREE.Vector3(), 
 	velocity: new THREE.Vector3(),
 	rotation: new THREE.Vector2(), 
-	spinning: new THREE.Vector2()
+	spinning: new THREE.Vector2(),
+	options :{
+		step : 0.5
+	}
 };
 player.position.x = 0;
-player.position.y =  150;
+player.position.y =  0;
 player.position.z = 0;
 //player.position.y = 0;
 // game systems code
@@ -45,7 +48,7 @@ var keyboardControls = ( function () {
 			// move around
 			forward.set( Math.sin( player.rotation.y ), 0, Math.cos( player.rotation.y ) );
 			sideways.set( forward.z, 0, - forward.x );
-			forward.multiplyScalar( keysPressed[ keys.Z ] || keysPressed[ keys.W ] ? - 0.1 : ( keysPressed[ keys.S ] ? 0.1 : 0 ) );
+			forward.multiplyScalar( keysPressed[ keys.Z ] || keysPressed[ keys.W ] ? - player.options.step : ( keysPressed[ keys.S ] ? player.options.step : 0 ) );
 			sideways.multiplyScalar( 0 );
 			var combined = forward.add( sideways );
 			if ( Math.abs( combined.x ) >= Math.abs( player.velocity.x ) ) player.velocity.x = combined.x;
@@ -77,10 +80,7 @@ function checkCollision(){
 		var ray = new THREE.Raycaster( originPoint, directionVector.clone().normalize() );
 		var collisionResults = ray.intersectObjects( collidableMeshList );
 		if ( collisionResults.length > 0 && collisionResults[0].distance < directionVector.length() ) {
-			
 
-
-	
 			forward.multiplyScalar( 0.75 );
 			sideways.multiplyScalar( 0 );
 			var combined = forward.add( sideways );
@@ -124,7 +124,7 @@ var applyPhysics = ( function () {
 					player.velocity.y = 0;
 					player.airborne = false;
 				}
-				if(player.airborne) player.velocity.z = 0;
+				//if(player.airborne) player.velocity.z = 0;
 				if ( player.airborne ) player.velocity.y -= gravity;
 				angles.copy( player.spinning ).multiplyScalar( time );
 				if ( ! player.airborne ) player.spinning.multiplyScalar( damping );
