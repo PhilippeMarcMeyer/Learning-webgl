@@ -1,3 +1,5 @@
+let planeSize = 100;
+let platform;
 // player player parameters
 var player = {
 	airborne: false,
@@ -80,8 +82,7 @@ function checkCollision(){
 		var ray = new THREE.Raycaster( originPoint, directionVector.clone().normalize() );
 		var collisionResults = ray.intersectObjects( collidableMeshList );
 		if ( collisionResults.length > 0 && collisionResults[0].distance < directionVector.length() ) {
-
-			forward.multiplyScalar( 0.75 );
+ 			forward.multiplyScalar( 0.75 );
 			sideways.multiplyScalar( 0 );
 			var combined = forward.add( sideways );
 			if ( Math.abs( combined.x ) >= Math.abs( player.velocity.x ) ) player.velocity.x = combined.x;
@@ -94,6 +95,31 @@ function checkCollision(){
 	}	
 
 }
+
+function getPlayerAltitude(x, z) {
+  let approxX = ~~x;
+  let approxZ = ~~z;
+  let vertices = platform.geometry.vertices;
+  let bestVertex = null;
+  let bestIndex = -1; 
+  let bestDistance = 500;
+  for(let i = 0; i < vertices.length;i++){
+	  let groundX = ~~vertices[i].x;
+	  let groundZ = ~~vertices[i].z;
+	  let distance = Math.sqrt((groundX-approxX)*(groundX-approxX)+(groundZ-approxZ)*(groundZ-approxZ));
+	  if(bestDistance > distance) {
+		  bestDistance = distance;
+		  bestIndex = i;
+	  }
+	  if(bestDistance < 3){
+		  break;
+	  }
+  }
+  if(bestIndex!=-1){
+	  bestVertex = vertices[bestIndex];
+  }
+  return bestVertex;
+} 
 
 function keepTogether(player,cube){
 	cube.position.x = player.position.x;
@@ -111,19 +137,26 @@ var applyPhysics = ( function () {
 	var angles = new THREE.Vector2();
 	var displacement = new THREE.Vector3();
 	return function ( dt ) {
-		var platform = scene.getObjectByName( "platform", true );
+		platform = scene.getObjectByName( "platform", true );
 		if ( platform ) {
 			timeLeft += dt;
 			// run several fixed-step iterations to approximate varying-step
 			dt = 5;
 			while ( timeLeft >= dt ) {
+				let currentVertex = getPlayerAltitude(player.position.x, player.position.z);
+				if(currentVertex != null){
+					let groundAlt = currentVertex.z < 100 ? 100 :currentVertex.z;// z : it's a rotated plan
+					player.position.y = groundAlt; 
+				}
+				//player.position.y = getY(player.position.x, player.position.z);
 				var time = 0.3, damping = 0.93, gravity = 0.01, tau = 2 * Math.PI;
-				player.airborne = true;
+				player.airborne = false;
+				/*
 				if(player.position.y > -1 && player.position.y < 3){
 					player.position.y = 0;
 					player.velocity.y = 0;
 					player.airborne = false;
-				}
+				}*/
 				//if(player.airborne) player.velocity.z = 0;
 				if ( player.airborne ) player.velocity.y -= gravity;
 				angles.copy( player.spinning ).multiplyScalar( time );
@@ -163,8 +196,12 @@ var renderer = new THREE.WebGLRenderer( { antialias: true } );
 
 renderer.setPixelRatio( window.devicePixelRatio );
 document.body.appendChild( renderer.domElement );
-var camera = new THREE.PerspectiveCamera( 60, 1, 0.1, 9000 );
+
+var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+//var camera = new THREE.PerspectiveCamera( 60, 1, 0.1, 9000 );
 var scene = new THREE.Scene();
+
+
 var envMap = new THREE.CubeTextureLoader().load( [
 	'textures/cube/skybox/px.jpg', // right
 	'textures/cube/skybox/nx.jpg', // left
@@ -199,15 +236,26 @@ sphere.castShadow = true; //default is false
 sphere.receiveShadow = false; //default
 scene.add( sphere );
 collidableMeshList.push(sphere)
+
 //Create a plane that receives shadows (but does not cast them)
-var planeGeometry = new THREE.PlaneBufferGeometry( 100, 100, 1, 1 );
-var planeMaterial = new THREE.MeshStandardMaterial( { color: 0x00aa00 } )
+addGround(scene,"platform");
+/*
+var planeGeometry = new THREE.PlaneGeometry( planeSize, planeSize, planeSize * 0.5, planeSize * 0.5 );
+var planeMaterial = new THREE.MeshStandardMaterial( { wireframe: true } )//{ color: 0x00aa00 }
 var plane = new THREE.Mesh( planeGeometry, planeMaterial );
+       for ( var i = 0; i<plane.geometry.vertices.length; i++ ) {
+            plane.geometry.vertices[i].z = data[i] * .1;
+ 
+        }
+		*/
+		/*
 plane.receiveShadow = true;
 plane.material.side = THREE.DoubleSide;
 plane.rotation.x = 1.5708;
 scene.add( plane );
-plane.name = "platform";
+*/
+
+//plane.name = "platform";
 
 var wall = new THREE.Mesh(wallGeometry, wallMaterial);
 wall.position.set(-20, 0, -20);
