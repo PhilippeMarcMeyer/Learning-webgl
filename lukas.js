@@ -44,10 +44,15 @@ function addGround(scene,name) {
   // to check uncomment the next line, numbers should be equal
   //console.log("length: " + terrain.length + ", vertices length: " + geometry.vertices.length);
 
+  geometry.userData = {
+    heights : []
+  };
+
   for (var i = 0, l = geometry.vertices.length; i < l; i++)
   {
     var terrainValue = terrain[i] / 255;
     geometry.vertices[i].z = geometry.vertices[i].z + terrainValue * height_scale ;
+    geometry.userData.heights.push({x:(i % img.width)-127,y:Math.floor((i / img.width)-127),h:geometry.vertices[i].z})
   }
   
   // might as well free up the input data at this point, or I should say let garbage collection know we're done.

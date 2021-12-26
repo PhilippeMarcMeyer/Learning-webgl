@@ -1,5 +1,7 @@
 let planeSize = 100;
 let platform;
+var MAX_STEP_ELEVATION = 1.15;
+var MAX_OVER_STEPS = 2;
 // player player parameters
 var player = {
 	airborne: false,
@@ -14,6 +16,8 @@ var player = {
 player.position.x = 0;
 player.position.y =  0;
 player.position.z = 0;
+var previousPosition= {x:0,y:0,z:0};
+var numberOverSteps = 0;
 //player.position.y = 0;
 // game systems code
 
@@ -64,7 +68,6 @@ var keyboardControls = ( function () {
 } )();
 
 function checkCollision(){
-	
         var MovingCube = scene.getObjectByName('cube');
         var originPoint = MovingCube.position.clone();
 
@@ -96,30 +99,33 @@ function checkCollision(){
 
 }
 
-function getPlayerAltitude(x, z) {
-  let approxX = ~~x;
-  let approxZ = ~~z;
-  let vertices = platform.geometry.vertices;
-  let bestVertex = null;
-  let bestIndex = -1; 
-  let bestDistance = 500;
-  for(let i = 0; i < vertices.length;i++){
-	  let groundX = ~~vertices[i].x;
-	  let groundZ = ~~vertices[i].z;
-	  let distance = Math.sqrt((groundX-approxX)*(groundX-approxX)+(groundZ-approxZ)*(groundZ-approxZ));
-	  if(bestDistance > distance) {
-		  bestDistance = distance;
-		  bestIndex = i;
-	  }
-	  if(bestDistance < 3){
-		  break;
-	  }
-  }
-  if(bestIndex!=-1){
-	  bestVertex = vertices[bestIndex];
-  }
-  return bestVertex;
-} 
+function getPlayerAltitude() {
+   var x = Math.floor(player.position.x /2400 * 250 + 0.5);
+   var y = Math.floor(player.position.z /2400 * 250 + 0.5);
+    let result = null;
+	
+
+	let arrAlt = platform.geometry.userData.heights.filter(function (position) {
+		return position.x === x && position.y === y;
+	});
+	if (arrAlt.length > 0) {
+		result = arrAlt[0].h*1.25 +8;
+		if(previousPosition.y >0 && result > 0){
+			if(result/previousPosition.y > MAX_STEP_ELEVATION) {
+				numberOverSteps++;
+				if(numberOverSteps>= MAX_OVER_STEPS){
+					numberOverSteps =0;
+					result = null;
+				}
+			}
+		}else{
+			numberOverSteps =0;
+		}
+
+	} 
+    return result;
+}
+
 
 function keepTogether(player,cube){
 	cube.position.x = player.position.x;
@@ -133,7 +139,6 @@ function keepTogether(player,cube){
 var applyPhysics = ( function () {
 	var timeStep = 5;
 	var timeLeft = timeStep + 1;
-
 	var angles = new THREE.Vector2();
 	var displacement = new THREE.Vector3();
 	return function ( dt ) {
@@ -141,12 +146,17 @@ var applyPhysics = ( function () {
 		if ( platform ) {
 			timeLeft += dt;
 			// run several fixed-step iterations to approximate varying-step
-			dt = 5;
+			dt = 3;
 			while ( timeLeft >= dt ) {
-				let currentVertex = getPlayerAltitude(player.position.x, player.position.z);
-				if(currentVertex != null){
-					let groundAlt = currentVertex.z < 100 ? 100 :currentVertex.z;// z : it's a rotated plan
-					player.position.y = groundAlt; 
+             
+				let currentAltitude = getPlayerAltitude();
+				if(currentAltitude != null){
+					player.position.y = currentAltitude; 
+					previousPosition = {...player.position};
+				}else{
+					player.position.x =  previousPosition.x;
+					player.position.y=  previousPosition.y;
+					player.position.z =  previousPosition.z;
 				}
 				//player.position.y = getY(player.position.x, player.position.z);
 				var time = 0.3, damping = 0.93, gravity = 0.01, tau = 2 * Math.PI;
@@ -258,7 +268,7 @@ scene.add( plane );
 //plane.name = "platform";
 
 var wall = new THREE.Mesh(wallGeometry, wallMaterial);
-wall.position.set(-20, 0, -20);
+wall.position.set(-20, 0, 100);
 wall.rotation.y = 3.14159 / 3;
 wall.receiveShadow = true;
 scene.add(wall);
