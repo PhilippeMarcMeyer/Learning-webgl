@@ -1,8 +1,10 @@
+ // comes from https://github.com/lukas2/threejs_landscape
+ 
  // Make the img global so we can easily access the width and height.
 var img;
 
 // How much to scale the height of the heightfield.
-var height_scale = 200;
+var heightScale = 200;
 
  
  //To get the pixels, draw the image onto a canvas. From the canvas get the Pixel (R,G,B,A)
@@ -33,7 +35,9 @@ function addGround(scene,name) {
   var geometry = new THREE.PlaneGeometry(2400*img.width/img.height, 2400, img.width-1, img.height-1);
   var material = new THREE.MeshLambertMaterial({
     color: 0xccccff,
-    wireframe: false
+    wireframe: false,
+    transparent:true,
+    opacity:0.9
   });
 
   // keep in mind, that the plane has more vertices than segments. If there's one segment, there's two vertices, if
@@ -48,11 +52,12 @@ function addGround(scene,name) {
     heights : []
   };
 
+  var halfWidth = Math.floor(img.width / 2);
   for (var i = 0, l = geometry.vertices.length; i < l; i++)
   {
     var terrainValue = terrain[i] / 255;
-    geometry.vertices[i].z = geometry.vertices[i].z + terrainValue * height_scale ;
-    geometry.userData.heights.push({x:(i % img.width)-127,y:Math.floor((i / img.width)-127),h:geometry.vertices[i].z})
+    geometry.vertices[i].z = geometry.vertices[i].z + terrainValue * heightScale ;
+    geometry.userData.heights.push({x:(i % img.width)-halfWidth,y:Math.floor((i / img.width)-halfWidth),h:geometry.vertices[i].z})
   }
   
   // might as well free up the input data at this point, or I should say let garbage collection know we're done.

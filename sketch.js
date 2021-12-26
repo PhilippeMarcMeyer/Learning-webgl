@@ -226,6 +226,28 @@ scene.background = envMap;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap; // default THREE.PCFShadowMap
 
+const waterGeometry = new THREE.PlaneGeometry(2400, 2400, 249, 249);
+waterGeometry.computeFaceNormals();
+waterGeometry.computeVertexNormals();
+var waterMaterial = new THREE.MeshLambertMaterial({
+    color: 0x0000ff,
+    wireframe: false,
+    transparent:true,
+    opacity:0.99
+  });
+const water = new THREE.Mesh( waterGeometry, waterMaterial );
+water.position = new THREE.Vector3(0,35,0);
+var q2 = new THREE.Quaternion();
+q2.setFromAxisAngle( new THREE.Vector3(-1,0,0), 90 * Math.PI / 180 );
+water.quaternion.multiplyQuaternions( q2, water.quaternion );
+water.name = "water";
+//water.rotation.set(new THREE.Vector3(0, 0, 0));
+//water.translate( 0, 0, 0);
+scene.add( water );
+
+// rotate the plane so up is where y is growing..
+
+
 var light = new THREE.DirectionalLight( 0xffffff, 1, 100 );
 light.position.set( 0.5, 0.5, 0 ); 			//default; light shining from top
 light.castShadow = true;            // default false
@@ -237,6 +259,7 @@ light.shadow.mapSize.height = 512; // default
 light.shadow.camera.near = 0.5;    // default
 light.shadow.camera.far = 500;     // default
 
+/*
 //Create a sphere that cast shadows (but does not receive them)
 var sphereGeometry = new THREE.SphereBufferGeometry( 5, 32, 32 );
 var sphereMaterial = new THREE.MeshStandardMaterial( { color: 0xff0000 } );
@@ -246,9 +269,11 @@ sphere.castShadow = true; //default is false
 sphere.receiveShadow = false; //default
 scene.add( sphere );
 collidableMeshList.push(sphere)
-
+*/
 //Create a plane that receives shadows (but does not cast them)
 addGround(scene,"platform");
+
+
 /*
 var planeGeometry = new THREE.PlaneGeometry( planeSize, planeSize, planeSize * 0.5, planeSize * 0.5 );
 var planeMaterial = new THREE.MeshStandardMaterial( { wireframe: true } )//{ color: 0x00aa00 }
@@ -266,14 +291,14 @@ scene.add( plane );
 */
 
 //plane.name = "platform";
-
+/*
 var wall = new THREE.Mesh(wallGeometry, wallMaterial);
 wall.position.set(-20, 0, 100);
 wall.rotation.y = 3.14159 / 3;
 wall.receiveShadow = true;
 scene.add(wall);
 collidableMeshList.push(wall);
-
+*/
 var cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
 var cubeMaterial = new THREE.MeshLambertMaterial({color: 0xff2255});
 var cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
@@ -304,7 +329,7 @@ var start = function ( gameLoop, gameViewportSize ) {
 };
 var gameLoop = function ( dt ) {
 	keyboardControls();
-	checkCollision();
+	//checkCollision();
 	applyPhysics( dt );
 	updateCamera();
 };
@@ -314,3 +339,5 @@ var gameViewportSize = function () {
 	};
 };
 start( gameLoop, gameViewportSize );
+
+ 
