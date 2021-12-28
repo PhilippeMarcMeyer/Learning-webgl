@@ -151,6 +151,7 @@ var applyPhysics = ( function () {
              
 				let currentAltitude = getPlayerAltitude();
 				if(currentAltitude != null){
+					currentAltitude = Math.max(currentAltitude,0)
 					player.position.y = currentAltitude; 
 					previousPosition = {...player.position};
 				}else{
@@ -194,7 +195,7 @@ var updateCamera = ( function () {
 		euler.y = player.rotation.y;
 		camera.quaternion.setFromEuler( euler );
 		camera.position.copy( player.position );
-		camera.position.y += 3.0;
+		camera.position.y += 5.0;
 	};
 } )();
 // init 3D stuff
@@ -207,7 +208,7 @@ var renderer = new THREE.WebGLRenderer( { antialias: true } );
 renderer.setPixelRatio( window.devicePixelRatio );
 document.body.appendChild( renderer.domElement );
 
-var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 5, 2000);
 //var camera = new THREE.PerspectiveCamera( 60, 1, 0.1, 9000 );
 var scene = new THREE.Scene();
 
@@ -229,14 +230,15 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap; // default THREE.PCFShadowMap
 const waterGeometry = new THREE.PlaneGeometry(2400, 2400, 249, 249);
 waterGeometry.computeFaceNormals();
 waterGeometry.computeVertexNormals();
-var waterMaterial = new THREE.MeshLambertMaterial({
-    color: 0x0000ff,
+var waterMaterial = new THREE.MeshPhongMaterial({
+    color: 0x000099,
+	emissive: 0x000044,
     wireframe: false,
     transparent:true,
-    opacity:0.99
+    opacity:0.7
   });
 const water = new THREE.Mesh( waterGeometry, waterMaterial );
-water.position = new THREE.Vector3(0,35,0);
+water.position = new THREE.Vector3(0,0,0);
 var q2 = new THREE.Quaternion();
 q2.setFromAxisAngle( new THREE.Vector3(-1,0,0), 90 * Math.PI / 180 );
 water.quaternion.multiplyQuaternions( q2, water.quaternion );
@@ -249,7 +251,7 @@ scene.add( water );
 
 
 var light = new THREE.DirectionalLight( 0xffffff, 1, 100 );
-light.position.set( 0.5, 0.5, 0 ); 			//default; light shining from top
+light.position.set( 0.3, 0.7, 0.2 ); 			//default; light shining from top
 light.castShadow = true;            // default false
 scene.add( light );
 

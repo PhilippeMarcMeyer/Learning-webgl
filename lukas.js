@@ -4,7 +4,7 @@
 var img;
 
 // How much to scale the height of the heightfield.
-var heightScale = 200;
+var heightScale = 300;
 
  
  //To get the pixels, draw the image onto a canvas. From the canvas get the Pixel (R,G,B,A)
@@ -34,11 +34,12 @@ function addGround(scene,name) {
   //var geometry = new THREE.PlaneGeometry(2400, 2400*img.width/img.height, img.height-1, img.width-1);
   var geometry = new THREE.PlaneGeometry(2400*img.width/img.height, 2400, img.width-1, img.height-1);
   var material = new THREE.MeshLambertMaterial({
-    color: 0xccccff,
+    color: 0xc2946c,
     wireframe: false,
-    transparent:true,
+    transparent:false,
     opacity:0.9
   });
+
 
   // keep in mind, that the plane has more vertices than segments. If there's one segment, there's two vertices, if
   // there's 10 segments, there's 11 vertices, and so forth. 
@@ -56,10 +57,10 @@ function addGround(scene,name) {
   for (var i = 0, l = geometry.vertices.length; i < l; i++)
   {
     var terrainValue = terrain[i] / 255;
-    geometry.vertices[i].z = geometry.vertices[i].z + terrainValue * heightScale ;
+    geometry.vertices[i].z =  terrainValue * heightScale -20;
     geometry.userData.heights.push({x:(i % img.width)-halfWidth,y:Math.floor((i / img.width)-halfWidth),h:geometry.vertices[i].z})
   }
-  
+  //material.vertexColors = THREE.VertexColors;
   // might as well free up the input data at this point, or I should say let garbage collection know we're done.
   terrain = null;
 
